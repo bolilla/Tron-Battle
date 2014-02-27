@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	DOWN   = "DOWN"
 	LEFT   = "LEFT"
 	RIGHT  = "RIGHT"
+	DIE    = "DIE" //when there is nowhere else to go
 )
 
 var (
@@ -33,8 +35,13 @@ var (
 func main() {
 	b = newBoard()
 	for i := 0; i < MAX_X*MAX_Y; i += 1 { //Just to avoid infinite loop
+		t0 := time.Now()
 		readInput()
 		fmt.Println(printMovement())
+		t1 := time.Now()
+		if DEBUG {
+			fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+		}
 	}
 }
 
@@ -64,13 +71,14 @@ func printMovement() (result string) {
 			fmt.Println(b)
 			fmt.Println("Am I alone?", alone)
 		}
-		if alone {
+		if alone && voronoiSizes[whoami] < 50 {
 			result = delayTheInevitable()
 		} else {
 			result = attack()
 		}
 	} else {
 		fmt.Println("Skipping step. I am alone. Nothing to think about...")
+		fmt.Println(b)
 	}
 	return
 }
@@ -121,7 +129,7 @@ func allFalse(input []bool) bool {
 
 //Computes the voronoi diagram from given point
 func computeVoronoiPerPlayer(x, y, i int, stepper, notifier chan bool) {
-	fmt.Println("Computing voronoi from", x, y, "for", i)
+	//fmt.Println("Computing voronoi from", x, y, "for", i)
 	if i == whoami {
 		alone = true
 	}
@@ -166,7 +174,8 @@ func (b board) getLongestMove(c coordinate) (string, int) {
 	if len(possibilities) == 0 {
 		return "", 0
 	} else if len(possibilities) == 1 {
-		return movement(possibilities[0], c), 1
+		_, length := b.getLongestMove(possibilities[0])
+		return movement(possibilities[0], c), length + 1
 	}
 	lengths := make([]int, len(possibilities))
 	for i, pos := range possibilities {
@@ -213,8 +222,6 @@ func computeOptionsValues(possibilities []coordinate) []int {
 		}
 		result[i] = voronoiSizes[whoami]
 		b[pos.x][pos.y] = oldVal
-		fmt.Println("Board after restore")
-		fmt.Println(b)
 	}
 	return result
 }
@@ -257,7 +264,6 @@ func (b *board) possiblePositions(x, y int) []coordinate {
 	if y < MAX_Y-1 && b[x][y+1] == -1 {
 		result = append(result, coordinate{x, y + 1})
 	}
-	fmt.Println("Possible positions from", x, y, ":", result)
 	return result
 }
 
@@ -284,6 +290,9 @@ func readInput() {
 		fmt.Println("Error reading number of players. Read", num, "characters. Error:", err)
 		os.Exit(1)
 	}
+	if DEBUG {
+		fmt.Println(numPlayers, "players. I am ", whoami)
+	}
 	//	if len(playersHeads) == 0 {
 	playersHeads = make([]coordinate, numPlayers)
 	voronoiSizes = make([]int, numPlayers)
@@ -292,6 +301,9 @@ func readInput() {
 		if num, err := fmt.Scanf("%d %d %d %d\n", &oldX, &oldY, &newX, &newY); err != nil {
 			fmt.Println("Error reading positions of player", i, ". Read", num, "characters. Error:", err)
 			os.Exit(1)
+		}
+		if DEBUG {
+			fmt.Println("Player", i, "to", newX, newY)
 		}
 		if newX == -1 || newY == -1 {
 			b.removeBeam(i)
@@ -347,3 +359,5 @@ func (b *board) removeBeam(p int) {
 		}
 	}
 }
+
+//Reads a board from a file
